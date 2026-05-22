@@ -32,6 +32,17 @@ jobs:
         run: |
           set -eu
 
+          SSH_HOST_CLEAN="$(printf '%s' "$SSH_HOST" | tr -d '\r\n' | sed -E "s#^[[:space:]]+##; s#[[:space:]]+$##; s#^[a-zA-Z]+://##; s#/$##")"
+          SSH_HOST_CLEAN="${SSH_HOST_CLEAN##*@}"
+          SSH_USERNAME_CLEAN="$(printf '%s' "$SSH_USERNAME" | tr -d '\r\n')"
+          SSH_PORT_CLEAN="$(printf '%s' "$SSH_PORT" | tr -d '\r\n')"
+          SSH_TARGET_PATH_CLEAN="$(printf '%s' "$SSH_TARGET_PATH" | tr -d '\r\n')"
+
+          if ! printf '%s' "$SSH_HOST_CLEAN" | grep -Eq '^[A-Za-z0-9.-]+$'; then
+            echo "Invalid SSH_HOST format. Use only a hostname like example.com or server.example.com (no protocol or path)."
+            exit 1
+          fi
+
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
@@ -50,5 +61,5 @@ jobs:
             --exclude='.github' \
             --exclude='README.md' \
             --exclude='LICENSE' \
-            -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=accept-new" \
-            ./ "$SSH_USERNAME@$SSH_HOST:$SSH_TARGET_PATH/"
+            -e "ssh -p $SSH_PORT_CLEAN -o StrictHostKeyChecking=accept-new" \
+            ./ "$SSH_USERNAME_CLEAN@$SSH_HOST_CLEAN:$SSH_TARGET_PATH_CLEAN/"
