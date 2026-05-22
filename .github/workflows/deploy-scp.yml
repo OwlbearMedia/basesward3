@@ -32,7 +32,12 @@ jobs:
         run: |
           set -eu
 
-          SSH_HOST_CLEAN="$(printf '%s' "$SSH_HOST" | tr -d '\r\n' | sed -E "s#^[[:space:]]+##; s#[[:space:]]+$##; s#^[a-zA-Z]+://##; s#/$##")"
+          SSH_HOST_CLEAN="$(printf '%s' "$SSH_HOST" | tr -d '\r\n')"
+          SSH_HOST_CLEAN="$(printf '%s' "$SSH_HOST_CLEAN" | awk '{$1=$1; print}')"
+          case "$SSH_HOST_CLEAN" in
+            *://*) SSH_HOST_CLEAN="${SSH_HOST_CLEAN#*://}" ;;
+          esac
+          SSH_HOST_CLEAN="${SSH_HOST_CLEAN%/}"
           SSH_HOST_CLEAN="${SSH_HOST_CLEAN##*@}"
           SSH_USERNAME_CLEAN="$(printf '%s' "$SSH_USERNAME" | tr -d '\r\n')"
           SSH_PORT_CLEAN="$(printf '%s' "$SSH_PORT" | tr -d '\r\n')"
