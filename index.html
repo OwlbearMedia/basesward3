@@ -11,6 +11,7 @@
     <link rel="canonical" href="https://basesward3.com/" />
 
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="Jacob Bases for Ward 3" />
     <meta
       property="og:title"
@@ -40,6 +41,11 @@
       name="twitter:image"
       content="https://basesward3.com/img/jacob-bases-rect.png"
     />
+    <meta
+      name="twitter:image:alt"
+      content="Jacob Bases campaign image"
+    />
+    <meta name="twitter:url" content="https://basesward3.com/" />
 
     <title>
       Jacob Bases for Mankato City Council Ward 3 | Official Campaign
@@ -52,22 +58,59 @@
       href="https://fonts.googleapis.com/css2?family=Poetsen+One&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?ver=1.0.0" />
+    <link rel="stylesheet" href="css/styles.css?ver=1.1.0" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@graph": [
           {
+            "@id": "https://basesward3.com/#website",
             "@type": "WebSite",
             "name": "Jacob Bases for Ward 3",
             "url": "https://basesward3.com/"
           },
           {
+            "@type": "WebPage",
+            "@id": "https://basesward3.com/#webpage",
+            "url": "https://basesward3.com/",
+            "name": "Jacob Bases for Mankato City Council Ward 3",
+            "description": "Official campaign site for Jacob Bases, candidate for Mankato City Council Ward 3. Learn about priorities, endorsements, and ways to volunteer.",
+            "isPartOf": {
+              "@id": "https://basesward3.com/#website"
+            },
+            "primaryImageOfPage": {
+              "@type": "ImageObject",
+              "url": "https://basesward3.com/img/jacob-bases-rect.png"
+            }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://basesward3.com/#organization",
+            "name": "Jacob Bases for Ward 3",
+            "url": "https://basesward3.com/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://basesward3.com/img/jacob-bases.png"
+            },
+            "address": {
+              "@type": "PostalAddress",
+              "streetAddress": "100 Cedar Street #306",
+              "addressLocality": "Mankato",
+              "addressRegion": "MN",
+              "postalCode": "56001",
+              "addressCountry": "US"
+            }
+          },
+          {
             "@type": "Person",
+            "@id": "https://basesward3.com/#person",
             "name": "Jacob Bases",
             "url": "https://basesward3.com/",
             "image": "https://basesward3.com/img/jacob-bases-rect.png",
             "description": "Jacob Bases is a candidate for Mankato City Council Ward 3.",
+            "worksFor": {
+              "@id": "https://basesward3.com/#organization"
+            },
             "address": {
               "@type": "PostalAddress",
               "addressLocality": "Mankato",
@@ -108,13 +151,7 @@
             <li><a href="#endorsements">Endorsements</a></li>
             <li><a href="#volunteer">Volunteer</a></li>
             <li>
-              <a
-                href="https://venmo.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="donate-link"
-                >Donate</a
-              >
+              <a href="#donate" class="donate-link">Donate</a>
             </li>
           </ul>
         </nav>
@@ -167,22 +204,32 @@
           well as with city staff and to highlight the progressive values
           reflected in this community.
         </p>
+        <p>
+          Focusing on issues through the lens of workers, tenants and human
+          rights.
+        </p>
       </section>
 
       <section id="endorsements">
         <h2>Endorsements</h2>
-        <p>
-          Julia is a progressive, passionate, and present leader who cares
-          deeply about building a community where everyone can live a life of
-          dignity, respect, and freedom.
-        </p>
+
         <div class="julia-flex">
+          <blockquote>
+            “Asking for the public trust and approaching the work of city
+            council is not something I take lightly. Throughout my time in
+            Mankato I have seen the work Julia has done and the people she has
+            touched. Her presence in this race has motivated me to consider how
+            I too can be a better public servant. I am proud to work on her
+            campaign, to run alongside her and enthusiastically endorse her
+            positions and candidacy for Mayor of Mankato.”<br />
+            -Jacob Bases
+          </blockquote>
           <a
             href="https://voteforjulia.com"
             target="_blank"
             rel="noopener noreferrer"
             ><img
-              src="img/julia.png"
+              src="img/julia-rect.webp"
               alt="Julia Hamann for Mankato Mayor"
               class="julia"
               width="1800"
@@ -193,10 +240,36 @@
         </div>
       </section>
 
+      <section id="donate">
+        <h2>Donate</h2>
+
+        <p>
+          Currently Jacob is running unopposed, for as long as that is the case
+          we would encourage you to Donate to Julia Hamann’s Mayoral campaign.
+          Julia will have to compete in a primary, every dollar donated and door
+          knocked helps ensure she will be on the ballot in November.
+        </p>
+
+        <p>
+          <a
+            href="https://voteforjulia.com/donate.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="donate-link"
+            >Donate to Julia</a
+          >
+        </p>
+
+        <p>
+          Jacob’s campaign will make a call for donation if another candidate
+          emerges or it otherwise becomes necessary. Thank you!
+        </p>
+      </section>
+
       <section id="volunteer">
         <h2>Volunteer</h2>
         <p>
-          Join the campaign team to help with outreach, events, and voter
+          Join the campaign team to help Jacob and Julia with outreach, events, and voter
           engagement.
         </p>
 
@@ -226,7 +299,7 @@
     </main>
 
     <footer>
-      <p>&copy; 2026 Jacob Bases. All rights reserved.</p>
+      <p>Paid for by Jacob Bases for Ward 3 | 100 Cedar Street #306, Mankato, MN 56001</p>
     </footer>
 
     <script src="js/scripts.js"></script>
