@@ -10,6 +10,21 @@
     <meta name="robots" content="index,follow" />
     <link rel="canonical" href="https://basesward3.com/" />
 
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-53PB7HPW81"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+
+      gtag("config", "G-53PB7HPW81");
+    </script>
+
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="Jacob Bases for Ward 3" />
@@ -41,10 +56,7 @@
       name="twitter:image"
       content="https://basesward3.com/img/jacob-bases-rect.png"
     />
-    <meta
-      name="twitter:image:alt"
-      content="Jacob Bases campaign image"
-    />
+    <meta name="twitter:image:alt" content="Jacob Bases campaign image" />
     <meta name="twitter:url" content="https://basesward3.com/" />
 
     <title>
@@ -225,9 +237,11 @@
             -Jacob Bases
           </blockquote>
           <a
+            id="julia-endorsement-link"
             href="https://voteforjulia.com"
             target="_blank"
             rel="noopener noreferrer"
+            aria-label="Julia Hamann, starting new conversations as Mayor of Mankato"
             ><img
               src="img/julia-rect.webp"
               alt="Julia Hamann for Mankato Mayor"
@@ -252,6 +266,7 @@
 
         <p>
           <a
+            id="julia-donate-link"
             href="https://voteforjulia.com/donate.html"
             target="_blank"
             rel="noopener noreferrer"
@@ -269,8 +284,8 @@
       <section id="volunteer">
         <h2>Volunteer</h2>
         <p>
-          Join the campaign team to help Jacob and Julia with outreach, events, and voter
-          engagement.
+          Join the campaign team to help Jacob and Julia with outreach, events,
+          and voter engagement.
         </p>
 
         <h3>Contact the Campaign</h3>
@@ -299,7 +314,10 @@
     </main>
 
     <footer>
-      <p>Paid for by Jacob Bases for Ward 3 | 100 Cedar Street #306, Mankato, MN 56001</p>
+      <p>
+        Paid for by Jacob Bases for Ward 3 | 100 Cedar Street #306, Mankato, MN
+        56001
+      </p>
     </footer>
 
     <script src="js/scripts.js"></script>
