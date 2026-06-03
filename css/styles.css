@@ -256,6 +256,15 @@ section {
   margin-bottom: 2rem;
 }
 
+.donate-info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.donate-info img {
+  max-width: 100%;
+}
+
 .contact-form {
   margin-top: 1rem;
   max-width: 640px;
@@ -343,6 +352,10 @@ section {
 
   section {
     scroll-margin-top: var(--header-offset);
+  }
+
+  .donate-info {
+    grid-template-columns: 1fr;
   }
 
   .contact-form button {
