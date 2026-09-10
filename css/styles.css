@@ -39,6 +39,35 @@
   top: 9px;
 }
 
+#letter-of-support {
+  margin-bottom: 3rem;
+}
+
+#letter-of-support h2 {
+  margin-bottom: 2rem;
+}
+
+#letter-of-support .letter-of-support-text p {
+  margin-bottom: 1rem;
+}
+
+.dfl {
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 2rem;
+}
+
+.youtube-iframe {
+  aspect-ratio: 16 / 9;
+  width: 100% !important;
+}
+
+.youtube-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
 @media (max-width: 700px) {
   .menu-toggle {
     display: block;
