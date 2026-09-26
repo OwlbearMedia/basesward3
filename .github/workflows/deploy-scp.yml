@@ -217,18 +217,34 @@ jobs:
           rm -rf -- "$prev"
 
           # renameat2(RENAME_EXCHANGE) swaps the two directories in one
-          # step, so the document root is never missing. If python3 or the
-          # syscall isn't available, fall back to two renames, which leaves
-          # the document root absent for a moment.
-          if command -v python3 >/dev/null && python3 -c '
+          # step, so the document root is never missing. The host has perl
+          # (cPanel depends on it) but no python3 on the PATH, so try perl
+          # first. If neither can make the call, fall back to two renames,
+          # which leaves the document root absent for a moment.
+          exchange() {
+            # perl's syscall() takes the raw number: 316 is renameat2 on
+            # x86_64 only. -100 is AT_FDCWD and 2 is RENAME_EXCHANGE.
+            if [ "$(uname -m)" = x86_64 ] && command -v perl >/dev/null &&
+              perl -e 'syscall(316, -100, $ARGV[0], -100, $ARGV[1], 2) == -1 and die "renameat2: $!\n"' "$1" "$2"; then
+              method=perl
+              return 0
+            fi
+            if command -v python3 >/dev/null && python3 -c '
           import ctypes, os, sys
           libc = ctypes.CDLL(None, use_errno=True)
           AT_FDCWD, RENAME_EXCHANGE = -100, 2
           if libc.renameat2(AT_FDCWD, os.fsencode(sys.argv[1]), AT_FDCWD, os.fsencode(sys.argv[2]), RENAME_EXCHANGE):
               sys.exit("renameat2: " + os.strerror(ctypes.get_errno()))
-          ' "$next" "$live"; then
+          ' "$1" "$2"; then
+              method=python3
+              return 0
+            fi
+            return 1
+          }
+
+          if exchange "$next" "$live"; then
             mv -- "$next" "$prev"
-            echo "Swapped new build into $live atomically (previous build kept at $prev)."
+            echo "Swapped new build into $live atomically via $method (previous build kept at $prev)."
           else
             mv -- "$live" "$prev"
             mv -- "$next" "$live"
