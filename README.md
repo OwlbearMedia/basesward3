@@ -72,7 +72,7 @@ To track another outbound link, give it an `id` and call `trackOutboundClick(lab
 
 Pushing to `main` triggers the [Deploy via rsync](.github/workflows/deploy-scp.yml) GitHub Actions workflow, which deploys the site to the web server over SSH. Other branches are not deployed. The site is on shared cPanel hosting (LiteSpeed on CloudLinux), and the process matches the one used for voteforjulia.com on the same host.
 
-Deploys never write into the live document root. Visitors see either the old site or the new one, never a half-uploaded mix. With the web root at `public_html`, each deploy:
+Deploys never write into the live document root, so visitors never see a half-uploaded mix of old and new files. With the atomic swap described below, every request gets either the old site or the new one. With the fallback, requests in the fraction of a second between its two renames can fail. With the web root at `public_html`, each deploy:
 
 1. Verifies the server's SSH host key against `SSH_HOST_FINGERPRINT` and refuses to connect if it doesn't match.
 2. Uploads the site into a clean `public_html_next` directory next to the web root.

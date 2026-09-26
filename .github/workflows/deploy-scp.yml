@@ -61,7 +61,7 @@ jobs:
           fi
 
           case "/$TARGET/" in
-            //|/./|*/../*|*'~'*)
+            //|*/./*|*/../*|*'~'*)
               echo "Invalid SSH_TARGET_PATH. Use the web root, like public_html or /home/<user>/public_html."
               exit 1
               ;;
