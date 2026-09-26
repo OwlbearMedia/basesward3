@@ -56,18 +56,15 @@ The Donorbox widget, YouTube embeds, Google Fonts, and Google Analytics load fro
 
 ### Analytics events
 
-`js/scripts.js` sends an `outbound_click` event to Google Analytics when visitors click:
-
-- the Julia Hamann endorsement image (`#julia-endorsement-link`, label `julia_homepage`)
-- the Julia donate link (`#julia-donate-link`, label `julia_donate`)
+`js/scripts.js` sends an `outbound_click` event to Google Analytics when visitors click the Julia Hamann endorsement image (`#julia-endorsement-link`, label `julia_homepage`).
 
 To track another outbound link, give it an `id` and call `trackOutboundClick(label, url)` from its click handler.
 
 ## Making changes
 
 - **Content:** edit `index.html` directly.
-- **Styles:** edit `css/styles.css`, then bump the cache-busting version in `index.html` (`css/styles.css?ver=1.3.0`) so returning visitors get the new file.
-- **Images:** add to `img/` and always set `width`, `height`, and `alt`. Use `loading="lazy"` for anything below the fold.
+- **Styles and scripts:** after editing `css/styles.css` or `js/scripts.js`, bump its cache-busting version in `index.html` (`?ver=`) so returning visitors get the new file.
+- **Images:** add to `img/`, sized for how large they're displayed (about 2× the CSS size), and always set `width`, `height`, and `alt`. Use `loading="lazy"` for anything below the fold. The server caches images for a week, so to replace one, add it under a new filename instead of overwriting it.
 - **SEO:** the meta description, Open Graph and Twitter tags, and JSON-LD structured data in `<head>` all repeat the same campaign details. If you change the title, description, or images, update every copy. Update `<lastmod>` in `sitemap.xml` after significant content changes.
 - **Footer:** the "Paid for by" disclaimer is required on campaign materials. Don't remove it.
 

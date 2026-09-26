@@ -45,7 +45,6 @@ if (contactForm) {
 }
 
 const juliaEndorsementLink = document.getElementById('julia-endorsement-link');
-const juliaDonateLink = document.getElementById('julia-donate-link');
 
 function trackOutboundClick(linkType, url) {
   if (typeof gtag !== 'function') {
@@ -63,11 +62,5 @@ function trackOutboundClick(linkType, url) {
 if (juliaEndorsementLink) {
   juliaEndorsementLink.addEventListener('click', function() {
     trackOutboundClick('julia_homepage', 'https://voteforjulia.com');
-  });
-}
-
-if (juliaDonateLink) {
-  juliaDonateLink.addEventListener('click', function() {
-    trackOutboundClick('julia_donate', 'https://voteforjulia.com/donate.html');
   });
 }
