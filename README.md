@@ -73,24 +73,25 @@ To track another outbound link, give it an `id` and call `trackOutboundClick(lab
 
 ## Deployment
 
-Pushing to `main` triggers the [Deploy via rsync](.github/workflows/deploy-scp.yml) GitHub Actions workflow, which deploys the site to the web server over SSH. Other branches are not deployed.
+Pushing to `main` triggers the [Deploy via rsync](.github/workflows/deploy-scp.yml) GitHub Actions workflow, which deploys the site to the web server over SSH. Other branches are not deployed. The site is on shared cPanel hosting (LiteSpeed on CloudLinux), and the process matches the one used for voteforjulia.com on the same host.
 
-Deploys are atomic: visitors see either the old site or the new one, never a half-uploaded mix. On the server, the web root (`SSH_TARGET_PATH`) is a symlink to the live release:
+Deploys never write into the live document root. Visitors see either the old site or the new one, never a half-uploaded mix. With the web root at `public_html`, each deploy:
 
-```
-/var/www/basesward3.com            -> /var/www/basesward3.com-releases/20260926204859-ae10e35
-/var/www/basesward3.com-releases/
-    20260926204855-d294087/
-    20260926204859-ae10e35/        # live
-```
+1. Verifies the server's SSH host key against `SSH_HOST_FINGERPRINT` and refuses to connect if it doesn't match.
+2. Uploads the site into a clean `public_html_next` directory next to the web root.
+3. Copies any cPanel IP Blocker rules from the live `.htaccess` into the staged one (see below).
+4. Swaps `public_html_next` into place, keeping the previous build as `public_html_prev`.
+5. Checks that https://basesward3.com/ responds.
 
-Each deploy:
+The swap uses Linux's `renameat2(RENAME_EXCHANGE)` (through `python3`) to exchange the two directories in one atomic step. If the host doesn't support it, the workflow falls back to two renames (`public_html` → `public_html_prev`, then `public_html_next` → `public_html`), which leaves the web root missing for a fraction of a second. The Actions log says which one ran.
 
-1. Uploads the repo into a new directory in `<SSH_TARGET_PATH>-releases/`, named `<UTC timestamp>-<short commit SHA>`. Unchanged files are hard-linked from the live release, so only changed files are transferred.
-2. Repoints the web root symlink at the new release with a single rename, which is atomic.
-3. Deletes all but the 5 newest releases (`KEEP_RELEASES` in the workflow).
+`public_html` stays a real directory. It isn't replaced with a symlink to a release directory, because cPanel manages the document root and can reset it.
 
-Each release contains exactly what's in the repo, so a file deleted from the repo is gone from the site after the next deploy. `.git*`, `.github`, `README.md`, and `LICENSE` are never uploaded.
+Each build contains exactly what's in the repo, so a file deleted from the repo is gone from the site after the next deploy. `.git*`, `.github`, `README.md`, and `LICENSE` are never uploaded.
+
+### cPanel IP Blocker rules
+
+cPanel's IP Blocker saves blocks as `deny from` lines in `public_html/.htaccess`, and builds its list from that file. The repo doesn't have those lines, so the deploy reads them from the live `.htaccess` and appends them to the staged one before the swap. Otherwise every deploy would silently lift every block. Manage blocks in cPanel → IP Blocker as usual; nothing about them belongs in this repo. The Actions log shows how many rules were carried over, never the addresses.
 
 ### Repository secrets
 
@@ -103,38 +104,26 @@ The workflow needs these repository secrets (**Settings → Secrets and variable
 | `SSH_USERNAME` | SSH user |
 | `SSH_PRIVATE_KEY` | Private key authorized on the server |
 | `SSH_PASSPHRASE` | Passphrase for the private key |
-| `SSH_TARGET_PATH` | Absolute path to the web root on the server |
+| `SSH_TARGET_PATH` | The web root: `public_html` (relative to the SSH user's home) or an absolute path |
+| `SSH_HOST_FINGERPRINT` | SHA256 fingerprint of the server's SSH host key, e.g. `SHA256:StI193FHo9…` |
+
+The deploy won't run without `SSH_HOST_FINGERPRINT`. To get it, read it from your own `known_hosts` for a host you've already connected to and trust. CageFS hides `/etc/ssh` on the server, so it can't be read there:
+
+```sh
+ssh-keygen -F "[<host>]:<port>" -l | grep -v '^#'
+```
+
+Store the `SHA256:…` token itself. Any of the host's key types (ECDSA, Ed25519, RSA) works. If the host key ever changes, deploys fail with "The host presented no key matching SSH_HOST_FINGERPRINT" until the secret is updated.
 
 ### Rolling back
 
-Point the symlink at an older release:
+Swap the previous build back in over SSH:
 
 ```sh
-cd /var/www   # the directory containing SSH_TARGET_PATH
-ln -s basesward3.com-releases/<older-release> basesward3.com.tmp && mv -T basesward3.com.tmp basesward3.com
+cd ~ && mv public_html public_html_next && mv public_html_prev public_html
 ```
 
-The next push to `main` deploys a new release on top as usual.
-
-### Server requirements
-
-- A Linux server (the swap uses GNU `mv -T`) with `bash` and `rsync`.
-- The SSH user must be able to write to the parent directory of `SSH_TARGET_PATH`, because the releases directory and the symlink live there.
-- The web server must follow a symlinked document root. nginx and Apache do by default.
-
-### First deploy
-
-The first deploy finds a real directory at `SSH_TARGET_PATH` instead of a symlink. A plain rename can't replace a directory with a symlink, so the workflow uses Linux's `renameat2(RENAME_EXCHANGE)` (through `python3`) to swap the two in one atomic step, with no downtime. The old directory is kept at `<SSH_TARGET_PATH>.pre-atomic-<release>`; delete it once the new setup is confirmed working.
-
-If the server has no `python3`, or the filesystem doesn't support the exchange, the deploy fails with the live site unchanged. Migrate by hand once over SSH instead. The site is briefly unavailable between the two commands:
-
-```sh
-cd /var/www   # the directory containing SSH_TARGET_PATH
-mkdir -p basesward3.com-releases
-mv basesward3.com basesward3.com-releases/00000000000000-initial && ln -s basesward3.com-releases/00000000000000-initial basesward3.com
-```
-
-Then re-run the workflow.
+The next push to `main` deploys a new build on top as usual, and replaces `public_html_next`.
 
 ## License
 

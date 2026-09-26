@@ -8,20 +8,23 @@ on:
 permissions:
   contents: read
 
+# Queue deploys rather than cancelling one mid-swap: if the host can't do an
+# atomic exchange, the swap falls back to two renames, and a cancel between
+# them would leave the site without a document root.
 concurrency:
   group: deploy-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Sync files over SSH
+    name: Deploy to production
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Upload release and swap it live
+      - name: Set up SSH with a pinned host key
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
@@ -29,22 +32,27 @@ jobs:
           SSH_PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_TARGET_PATH: ${{ secrets.SSH_TARGET_PATH }}
-          KEEP_RELEASES: 5
+          SSH_HOST_FINGERPRINT: ${{ secrets.SSH_HOST_FINGERPRINT }}
         run: |
-          set -eu
+          set -euo pipefail
 
-          SSH_HOST_CLEAN="$(printf '%s' "$SSH_HOST" | tr -d '\r\n')"
-          SSH_HOST_CLEAN="$(printf '%s' "$SSH_HOST_CLEAN" | awk '{$1=$1; print}')"
+          clean() { printf '%s' "$1" | tr -d '\r\n' | awk '{$1=$1; print}'; }
+
+          SSH_HOST_CLEAN="$(clean "$SSH_HOST")"
           case "$SSH_HOST_CLEAN" in
             *://*) SSH_HOST_CLEAN="${SSH_HOST_CLEAN#*://}" ;;
           esac
           SSH_HOST_CLEAN="${SSH_HOST_CLEAN%/}"
           SSH_HOST_CLEAN="${SSH_HOST_CLEAN##*@}"
-          SSH_USERNAME_CLEAN="$(printf '%s' "$SSH_USERNAME" | tr -d '\r\n')"
-          SSH_PORT_CLEAN="$(printf '%s' "$SSH_PORT" | tr -d '\r\n')"
-          SSH_TARGET_PATH_CLEAN="$(printf '%s' "$SSH_TARGET_PATH" | tr -d '\r\n')"
-          while [ "${SSH_TARGET_PATH_CLEAN%/}" != "$SSH_TARGET_PATH_CLEAN" ]; do
-            SSH_TARGET_PATH_CLEAN="${SSH_TARGET_PATH_CLEAN%/}"
+          SSH_USERNAME_CLEAN="$(clean "$SSH_USERNAME")"
+          SSH_PORT_CLEAN="$(clean "$SSH_PORT")"
+          FINGERPRINT="$(clean "$SSH_HOST_FINGERPRINT")"
+
+          # Relative paths are relative to the SSH user's home directory.
+          TARGET="$(clean "$SSH_TARGET_PATH")"
+          TARGET="${TARGET#\~/}"
+          while [ "${TARGET%/}" != "$TARGET" ]; do
+            TARGET="${TARGET%/}"
           done
 
           if ! printf '%s' "$SSH_HOST_CLEAN" | grep -Eq '^[A-Za-z0-9.-]+$'; then
@@ -52,15 +60,43 @@ jobs:
             exit 1
           fi
 
-          case "$SSH_TARGET_PATH_CLEAN" in
-            /?*) ;;
-            *)
-              echo "Invalid SSH_TARGET_PATH. Use an absolute path to the web root, like /var/www/example.com (not /)."
+          case "/$TARGET/" in
+            //|/./|*/../*|*'~'*)
+              echo "Invalid SSH_TARGET_PATH. Use the web root, like public_html or /home/<user>/public_html."
               exit 1
               ;;
           esac
 
+          # Without a pinned key, StrictHostKeyChecking would have to accept
+          # whatever answers on this host and port.
+          if [ -z "$FINGERPRINT" ]; then
+            echo "SSH_HOST_FINGERPRINT is unset; refusing to deploy without verifying the host. See README.md." >&2
+            exit 1
+          fi
+          case "$FINGERPRINT" in
+            SHA256:*) ;;
+            *) FINGERPRINT="SHA256:$FINGERPRINT" ;;
+          esac
+
           install -m 700 -d ~/.ssh
+
+          # Keep only the scanned host key that matches the pinned
+          # fingerprint. ssh then refuses any other key.
+          ssh-keyscan -p "$SSH_PORT_CLEAN" "$SSH_HOST_CLEAN" 2>/dev/null | grep -v '^#' > ~/.ssh/scanned_keys || true
+          : > ~/.ssh/known_hosts
+          while IFS= read -r line; do
+            fp="$(printf '%s\n' "$line" | ssh-keygen -lf - | awk '{print $2}')"
+            if [ "$fp" = "$FINGERPRINT" ]; then
+              printf '%s\n' "$line" >> ~/.ssh/known_hosts
+            fi
+          done < ~/.ssh/scanned_keys
+          rm -f ~/.ssh/scanned_keys
+
+          if [ ! -s ~/.ssh/known_hosts ]; then
+            echo "The host presented no key matching SSH_HOST_FINGERPRINT. Refusing to connect." >&2
+            exit 1
+          fi
+
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
@@ -72,81 +108,133 @@ jobs:
 
           eval "$(ssh-agent -s)"
           DISPLAY=:0 SSH_ASKPASS=~/.ssh/askpass.sh setsid -w ssh-add ~/.ssh/id_rsa < /dev/null
+          rm -f ~/.ssh/id_rsa ~/.ssh/askpass.sh
 
-          # SSH_TARGET_PATH becomes a symlink to the live release. Releases
-          # live in a sibling directory so they share a filesystem with it.
-          TARGET="$SSH_TARGET_PATH_CLEAN"
-          RELEASES="${TARGET}-releases"
-          RELEASE="$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
-          SSH_DEST="$SSH_USERNAME_CLEAN@$SSH_HOST_CLEAN"
-          SSH_CMD="ssh -p $SSH_PORT_CLEAN -o StrictHostKeyChecking=accept-new"
+          SSH_CMD="ssh -p $SSH_PORT_CLEAN -o StrictHostKeyChecking=yes -o BatchMode=yes"
+          {
+            echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
+            echo "SSH_AGENT_PID=$SSH_AGENT_PID"
+            echo "SSH_CMD=$SSH_CMD"
+            echo "SSH_DEST=$SSH_USERNAME_CLEAN@$SSH_HOST_CLEAN"
+            echo "LIVE=$TARGET"
+            echo "NEXT=${TARGET}_next"
+            echo "PREV=${TARGET}_prev"
+          } >> "$GITHUB_ENV"
 
-          remote() {
-            $SSH_CMD "$SSH_DEST" "bash -s -- $(printf '%q ' "$@")"
-          }
-
-          # Create the release directory and find the live release, if any,
-          # so unchanged files can be hard-linked instead of re-uploaded.
-          CURRENT="$(remote "$TARGET" "$RELEASES/$RELEASE" <<'EOF'
-          set -eu
-          mkdir -p "$2"
-          if [ -L "$1" ]; then
-            readlink -f "$1"
-          elif [ -d "$1" ]; then
-            printf '%s\n' "$1"
-          fi
+          # `remote ARG...` runs the script on stdin on the server with ARGs
+          # as $1, $2, ...
+          install -d ~/.local/bin
+          cat > ~/.local/bin/remote <<'EOF'
+          #!/usr/bin/env bash
+          exec $SSH_CMD "$SSH_DEST" "bash -s -- $(printf '%q ' "$@")"
           EOF
-          )"
+          chmod 755 ~/.local/bin/remote
+          echo ~/.local/bin >> "$GITHUB_PATH"
 
-          LINK_DEST=()
-          if [ -n "$CURRENT" ]; then
-            LINK_DEST=(--link-dest="$CURRENT")
-          fi
+      # The first connection only touches the staging directory, so a failed
+      # handshake or unreachable host leaves the live site untouched.
+      - name: Prepare clean staging directory
+        run: |
+          remote "$NEXT" <<'EOF'
+          set -euo pipefail
+          rm -rf -- "$1"
+          mkdir -p -- "$1"
+          EOF
 
-          rsync -az "${LINK_DEST[@]}" \
+      - name: Upload site to staging directory
+        run: |
+          rsync -az \
             --exclude='.git*' \
             --exclude='.github' \
             --exclude='README.md' \
             --exclude='LICENSE' \
             -e "$SSH_CMD" \
-            ./ "$SSH_DEST:$RELEASES/$RELEASE/"
+            ./ "$SSH_DEST:$NEXT/"
 
-          # Point the web root at the new release with a single rename(),
-          # then prune old releases.
-          remote "$TARGET" "$RELEASES" "$RELEASE" "$KEEP_RELEASES" <<'EOF'
-          set -eu
-          target=$1 releases=$2 release=$3 keep=$4
-          new="$releases/$release"
+      # cPanel's IP Blocker writes `deny from` lines into the live
+      # .htaccess, and lists blocks from public_html/.htaccess. The staged
+      # build doesn't have them, so without this step every deploy would
+      # silently unblock every address. cPanel stays the source of truth.
+      - name: Carry cPanel IP Blocker rules into the staged .htaccess
+        run: |
+          remote "$LIVE" "$NEXT" <<'EOF'
+          set -euo pipefail
+          live="$1/.htaccess"
+          staged="$2/.htaccess"
 
-          next="$target.next-$release"
-          ln -s "$new" "$next"
+          denies=""
+          if [ -f "$live" ]; then
+            denies=$(
+              { grep -iE '^[[:space:]]*deny[[:space:]]+from[[:space:]]+[^[:space:]]+[[:space:]]*$' "$live" || true; } \
+                | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/[[:space:]]+/ /g' \
+                | tr 'A-Z' 'a-z' | LC_ALL=C sort -u
+            )
+          fi
 
-          if [ -d "$target" ] && [ ! -L "$target" ]; then
-            # One-time migration: the web root is still a real directory.
-            # rename() can't replace a directory with a symlink, so exchange
-            # the two in one renameat2(RENAME_EXCHANGE) call, which leaves
-            # the old directory at $next. Anything short of an atomic
-            # exchange aborts without touching the live site.
-            if ! python3 -c '
+          if [ -z "$denies" ]; then
+            echo "No cPanel IP Blocker rules to carry over."
+            exit 0
+          fi
+
+          {
+            echo ""
+            echo "# --- cPanel IP Blocker rules, carried across this deploy ---"
+            echo "# Managed from cPanel > IP Blocker, never from this repo."
+            echo "<Files 403.shtml>"
+            echo "order allow,deny"
+            echo "allow from all"
+            echo "</Files>"
+            echo ""
+            printf '%s\n' "$denies"
+          } >> "$staged"
+
+          # Count only: the addresses shouldn't end up in the Actions log.
+          echo "Carried over $(printf '%s\n' "$denies" | wc -l | tr -d ' ') IP Blocker rule(s)."
+          EOF
+
+      - name: Swap staging into the live document root
+        run: |
+          remote "$LIVE" "$NEXT" "$PREV" <<'EOF'
+          set -euo pipefail
+          live=$1 next=$2 prev=$3
+
+          if [ ! -d "$next" ]; then
+            echo "Staging directory $next is missing; aborting swap." >&2
+            exit 1
+          fi
+
+          if [ ! -e "$live" ]; then
+            mv -- "$next" "$live"
+            echo "Moved new build into $live (there was no previous build)."
+            exit 0
+          fi
+
+          if [ -L "$live" ] || [ ! -d "$live" ]; then
+            echo "$live is not a directory; refusing to swap." >&2
+            exit 1
+          fi
+
+          rm -rf -- "$prev"
+
+          # renameat2(RENAME_EXCHANGE) swaps the two directories in one
+          # step, so the document root is never missing. If python3 or the
+          # syscall isn't available, fall back to two renames, which leaves
+          # the document root absent for a moment.
+          if command -v python3 >/dev/null && python3 -c '
           import ctypes, os, sys
           libc = ctypes.CDLL(None, use_errno=True)
           AT_FDCWD, RENAME_EXCHANGE = -100, 2
           if libc.renameat2(AT_FDCWD, os.fsencode(sys.argv[1]), AT_FDCWD, os.fsencode(sys.argv[2]), RENAME_EXCHANGE):
               sys.exit("renameat2: " + os.strerror(ctypes.get_errno()))
-          ' "$next" "$target"; then
-              rm -f "$next"
-              echo "Could not atomically replace the web root directory with a symlink."
-              echo "The live site is unchanged. See 'First deploy' in README.md to migrate by hand."
-              exit 1
-            fi
-            mv "$next" "$target.pre-atomic-$release"
-            echo "Moved previous web root to $target.pre-atomic-$release"
+          ' "$next" "$live"; then
+            mv -- "$next" "$prev"
+            echo "Swapped new build into $live atomically (previous build kept at $prev)."
           else
-            mv -T "$next" "$target"
+            mv -- "$live" "$prev"
+            mv -- "$next" "$live"
+            echo "Swapped new build into $live with two renames; atomic exchange unavailable (previous build kept at $prev)."
           fi
-          echo "Live: $target -> $new"
-
-          for dir in $(ls -1 "$releases" | sort -r | tail -n +$((keep + 1))); do
-            [ "$releases/$dir" = "$new" ] || rm -rf -- "$releases/$dir"
-          done
           EOF
+
+      - name: Verify site is responding
+        run: curl --fail --silent --show-error --output /dev/null --max-time 15 --retry 3 --retry-delay 5 https://basesward3.com/
