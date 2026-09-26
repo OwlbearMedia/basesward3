@@ -43,12 +43,22 @@ jobs:
           SSH_USERNAME_CLEAN="$(printf '%s' "$SSH_USERNAME" | tr -d '\r\n')"
           SSH_PORT_CLEAN="$(printf '%s' "$SSH_PORT" | tr -d '\r\n')"
           SSH_TARGET_PATH_CLEAN="$(printf '%s' "$SSH_TARGET_PATH" | tr -d '\r\n')"
-          SSH_TARGET_PATH_CLEAN="${SSH_TARGET_PATH_CLEAN%/}"
+          while [ "${SSH_TARGET_PATH_CLEAN%/}" != "$SSH_TARGET_PATH_CLEAN" ]; do
+            SSH_TARGET_PATH_CLEAN="${SSH_TARGET_PATH_CLEAN%/}"
+          done
 
           if ! printf '%s' "$SSH_HOST_CLEAN" | grep -Eq '^[A-Za-z0-9.-]+$'; then
             echo "Invalid SSH_HOST format. Use only a hostname like example.com or server.example.com (no protocol or path)."
             exit 1
           fi
+
+          case "$SSH_TARGET_PATH_CLEAN" in
+            /?*) ;;
+            *)
+              echo "Invalid SSH_TARGET_PATH. Use an absolute path to the web root, like /var/www/example.com (not /)."
+              exit 1
+              ;;
+          esac
 
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
@@ -108,17 +118,32 @@ jobs:
           target=$1 releases=$2 release=$3 keep=$4
           new="$releases/$release"
 
-          ln -s "$new" "$target.next-$release"
+          next="$target.next-$release"
+          ln -s "$new" "$next"
 
-          # One-time migration: the first deploy finds a real directory at
-          # the web root. Move it aside (kept as a backup) so the symlink
-          # can take its place.
           if [ -d "$target" ] && [ ! -L "$target" ]; then
-            mv "$target" "$target.pre-atomic-$release"
-            echo "Moved existing web root to $target.pre-atomic-$release"
+            # One-time migration: the web root is still a real directory.
+            # rename() can't replace a directory with a symlink, so exchange
+            # the two in one renameat2(RENAME_EXCHANGE) call, which leaves
+            # the old directory at $next. Anything short of an atomic
+            # exchange aborts without touching the live site.
+            if ! python3 -c '
+          import ctypes, os, sys
+          libc = ctypes.CDLL(None, use_errno=True)
+          AT_FDCWD, RENAME_EXCHANGE = -100, 2
+          if libc.renameat2(AT_FDCWD, os.fsencode(sys.argv[1]), AT_FDCWD, os.fsencode(sys.argv[2]), RENAME_EXCHANGE):
+              sys.exit("renameat2: " + os.strerror(ctypes.get_errno()))
+          ' "$next" "$target"; then
+              rm -f "$next"
+              echo "Could not atomically replace the web root directory with a symlink."
+              echo "The live site is unchanged. See 'First deploy' in README.md to migrate by hand."
+              exit 1
+            fi
+            mv "$next" "$target.pre-atomic-$release"
+            echo "Moved previous web root to $target.pre-atomic-$release"
+          else
+            mv -T "$next" "$target"
           fi
-
-          mv -T "$target.next-$release" "$target"
           echo "Live: $target -> $new"
 
           for dir in $(ls -1 "$releases" | sort -r | tail -n +$((keep + 1))); do

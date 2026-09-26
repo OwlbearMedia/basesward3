@@ -92,6 +92,19 @@ Each deploy:
 
 Each release contains exactly what's in the repo, so a file deleted from the repo is gone from the site after the next deploy. `.git*`, `.github`, `README.md`, and `LICENSE` are never uploaded.
 
+### Repository secrets
+
+The workflow needs these repository secrets (**Settings → Secrets and variables → Actions**):
+
+| Secret | Description |
+| --- | --- |
+| `SSH_HOST` | Server hostname only, e.g. `example.com` (no protocol, user, or path) |
+| `SSH_PORT` | SSH port |
+| `SSH_USERNAME` | SSH user |
+| `SSH_PRIVATE_KEY` | Private key authorized on the server |
+| `SSH_PASSPHRASE` | Passphrase for the private key |
+| `SSH_TARGET_PATH` | Absolute path to the web root on the server |
+
 ### Rolling back
 
 Point the symlink at an older release:
@@ -108,18 +121,20 @@ The next push to `main` deploys a new release on top as usual.
 - A Linux server (the swap uses GNU `mv -T`) with `bash` and `rsync`.
 - The SSH user must be able to write to the parent directory of `SSH_TARGET_PATH`, because the releases directory and the symlink live there.
 - The web server must follow a symlinked document root. nginx and Apache do by default.
-- On the first deploy, an existing real directory at `SSH_TARGET_PATH` is moved aside to `<SSH_TARGET_PATH>.pre-atomic-<release>` and replaced by the symlink. Delete that backup once the new setup is confirmed working.
 
-It needs these repository secrets (**Settings → Secrets and variables → Actions**):
+### First deploy
 
-| Secret | Description |
-| --- | --- |
-| `SSH_HOST` | Server hostname only, e.g. `example.com` (no protocol, user, or path) |
-| `SSH_PORT` | SSH port |
-| `SSH_USERNAME` | SSH user |
-| `SSH_PRIVATE_KEY` | Private key authorized on the server |
-| `SSH_PASSPHRASE` | Passphrase for the private key |
-| `SSH_TARGET_PATH` | Absolute path to the web root on the server |
+The first deploy finds a real directory at `SSH_TARGET_PATH` instead of a symlink. A plain rename can't replace a directory with a symlink, so the workflow uses Linux's `renameat2(RENAME_EXCHANGE)` (through `python3`) to swap the two in one atomic step, with no downtime. The old directory is kept at `<SSH_TARGET_PATH>.pre-atomic-<release>`; delete it once the new setup is confirmed working.
+
+If the server has no `python3`, or the filesystem doesn't support the exchange, the deploy fails with the live site unchanged. Migrate by hand once over SSH instead. The site is briefly unavailable between the two commands:
+
+```sh
+cd /var/www   # the directory containing SSH_TARGET_PATH
+mkdir -p basesward3.com-releases
+mv basesward3.com basesward3.com-releases/00000000000000-initial && ln -s basesward3.com-releases/00000000000000-initial basesward3.com
+```
+
+Then re-run the workflow.
 
 ## License
 
