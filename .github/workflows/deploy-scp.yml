@@ -21,7 +21,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Sync changed files to server
+      - name: Upload release and swap it live
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
@@ -29,6 +29,7 @@ jobs:
           SSH_PASSPHRASE: ${{ secrets.SSH_PASSPHRASE }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_TARGET_PATH: ${{ secrets.SSH_TARGET_PATH }}
+          KEEP_RELEASES: 5
         run: |
           set -eu
 
@@ -42,6 +43,7 @@ jobs:
           SSH_USERNAME_CLEAN="$(printf '%s' "$SSH_USERNAME" | tr -d '\r\n')"
           SSH_PORT_CLEAN="$(printf '%s' "$SSH_PORT" | tr -d '\r\n')"
           SSH_TARGET_PATH_CLEAN="$(printf '%s' "$SSH_TARGET_PATH" | tr -d '\r\n')"
+          SSH_TARGET_PATH_CLEAN="${SSH_TARGET_PATH_CLEAN%/}"
 
           if ! printf '%s' "$SSH_HOST_CLEAN" | grep -Eq '^[A-Za-z0-9.-]+$'; then
             echo "Invalid SSH_HOST format. Use only a hostname like example.com or server.example.com (no protocol or path)."
@@ -61,10 +63,65 @@ jobs:
           eval "$(ssh-agent -s)"
           DISPLAY=:0 SSH_ASKPASS=~/.ssh/askpass.sh setsid -w ssh-add ~/.ssh/id_rsa < /dev/null
 
-          rsync -az --delete \
+          # SSH_TARGET_PATH becomes a symlink to the live release. Releases
+          # live in a sibling directory so they share a filesystem with it.
+          TARGET="$SSH_TARGET_PATH_CLEAN"
+          RELEASES="${TARGET}-releases"
+          RELEASE="$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
+          SSH_DEST="$SSH_USERNAME_CLEAN@$SSH_HOST_CLEAN"
+          SSH_CMD="ssh -p $SSH_PORT_CLEAN -o StrictHostKeyChecking=accept-new"
+
+          remote() {
+            $SSH_CMD "$SSH_DEST" "bash -s -- $(printf '%q ' "$@")"
+          }
+
+          # Create the release directory and find the live release, if any,
+          # so unchanged files can be hard-linked instead of re-uploaded.
+          CURRENT="$(remote "$TARGET" "$RELEASES/$RELEASE" <<'EOF'
+          set -eu
+          mkdir -p "$2"
+          if [ -L "$1" ]; then
+            readlink -f "$1"
+          elif [ -d "$1" ]; then
+            printf '%s\n' "$1"
+          fi
+          EOF
+          )"
+
+          LINK_DEST=()
+          if [ -n "$CURRENT" ]; then
+            LINK_DEST=(--link-dest="$CURRENT")
+          fi
+
+          rsync -az "${LINK_DEST[@]}" \
             --exclude='.git*' \
             --exclude='.github' \
             --exclude='README.md' \
             --exclude='LICENSE' \
-            -e "ssh -p $SSH_PORT_CLEAN -o StrictHostKeyChecking=accept-new" \
-            ./ "$SSH_USERNAME_CLEAN@$SSH_HOST_CLEAN:$SSH_TARGET_PATH_CLEAN/"
+            -e "$SSH_CMD" \
+            ./ "$SSH_DEST:$RELEASES/$RELEASE/"
+
+          # Point the web root at the new release with a single rename(),
+          # then prune old releases.
+          remote "$TARGET" "$RELEASES" "$RELEASE" "$KEEP_RELEASES" <<'EOF'
+          set -eu
+          target=$1 releases=$2 release=$3 keep=$4
+          new="$releases/$release"
+
+          ln -s "$new" "$target.next-$release"
+
+          # One-time migration: the first deploy finds a real directory at
+          # the web root. Move it aside (kept as a backup) so the symlink
+          # can take its place.
+          if [ -d "$target" ] && [ ! -L "$target" ]; then
+            mv "$target" "$target.pre-atomic-$release"
+            echo "Moved existing web root to $target.pre-atomic-$release"
+          fi
+
+          mv -T "$target.next-$release" "$target"
+          echo "Live: $target -> $new"
+
+          for dir in $(ls -1 "$releases" | sort -r | tail -n +$((keep + 1))); do
+            [ "$releases/$dir" = "$new" ] || rm -rf -- "$releases/$dir"
+          done
+          EOF
