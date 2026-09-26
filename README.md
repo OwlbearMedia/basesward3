@@ -80,7 +80,7 @@ Deploys never write into the live document root, so visitors never see a half-up
 4. Swaps `public_html_next` into place, keeping the previous build as `public_html_prev`.
 5. Checks that https://basesward3.com/ responds.
 
-The swap uses Linux's `renameat2(RENAME_EXCHANGE)` (through `python3`) to exchange the two directories in one atomic step. If the host doesn't support it, the workflow falls back to two renames (`public_html` → `public_html_prev`, then `public_html_next` → `public_html`), which leaves the web root missing for a fraction of a second. The Actions log says which one ran.
+The swap uses Linux's `renameat2(RENAME_EXCHANGE)` to exchange the two directories in one atomic step. It makes the call through `perl`, which every cPanel server has, or through `python3` if `perl` can't. `python3` isn't on the path on this host. If neither works, the workflow falls back to two renames (`public_html` → `public_html_prev`, then `public_html_next` → `public_html`), which leaves the web root missing for a fraction of a second. The Actions log says which one ran.
 
 `public_html` stays a real directory. It isn't replaced with a symlink to a release directory, because cPanel manages the document root and can reset it.
 
