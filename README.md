@@ -29,7 +29,7 @@ The site is a single static page: plain HTML, CSS, and JavaScript. There is no b
 | About Jacob | `#about` | Bio |
 | Issues | `#issues` | Embedded YouTube videos (privacy-enhanced `youtube-nocookie.com`, lazy loaded) |
 | Endorsements | `#endorsements` | Endorsement of Julia Hamann for Mayor, linking to voteforjulia.com |
-| Letter of Support | `#letter-of-support` | Blue Earth County DFL letter of support |
+| Support and Recognition | `#letter-of-support` | Blue Earth County DFL letter of support, and the Moms Demand Action Gun Sense Candidate distinction linking to gunsensevoter.org. Neither is an endorsement |
 | Donate | `#donate` | Donorbox donation widget |
 | Volunteer | `#volunteer` | Contact form submitted to Formspree |
 
