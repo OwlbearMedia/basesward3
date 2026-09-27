@@ -383,6 +383,21 @@ section {
   height: auto;
 }
 
+.gun-sense {
+  margin-top: 3rem;
+}
+
+.gun-sense > a {
+  justify-self: center;
+}
+
+.gun-sense-badge {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+}
+
 @media (max-width: 700px) {
   header {
     padding: 0.5rem;
@@ -438,5 +453,10 @@ section {
 
   .julia-flex img.julia {
     max-width: 100%;
+  }
+
+  .gun-sense-badge {
+    max-width: 240px;
+    margin-bottom: 2rem;
   }
 }
