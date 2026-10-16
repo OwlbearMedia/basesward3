@@ -39,6 +39,7 @@
   top: 9px;
 }
 
+#endorsements,
 #letter-of-support {
   margin-bottom: 3rem;
 }
@@ -47,7 +48,7 @@
   margin-bottom: 2rem;
 }
 
-#letter-of-support .letter-of-support-text p {
+.julia-flex .letter-of-support-text p {
   margin-bottom: 1rem;
 }
 
@@ -114,6 +115,10 @@
 .julia-flex p {
   flex: 1;
   margin: 0;
+}
+
+.julia-flex + .julia-flex {
+  margin-top: 3rem;
 }
 
 /* ── Reset ── */
@@ -383,15 +388,13 @@ section {
   height: auto;
 }
 
-.gun-sense {
-  margin-top: 3rem;
-}
-
-.gun-sense > a {
+.gun-sense > a,
+.square-logo {
   justify-self: center;
 }
 
-.gun-sense-badge {
+.gun-sense-badge,
+.square-logo {
   display: block;
   width: 100%;
   max-width: 300px;
@@ -455,7 +458,8 @@ section {
     max-width: 100%;
   }
 
-  .gun-sense-badge {
+  .gun-sense-badge,
+  .square-logo {
     max-width: 240px;
     margin-bottom: 2rem;
   }
